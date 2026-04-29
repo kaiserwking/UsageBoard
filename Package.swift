@@ -20,10 +20,6 @@ let package = Package(
             name: "UsageBoardApp",
             dependencies: ["UsageBoardCore"]
         ),
-        .executableTarget(
-            name: "UsageBoardSelfTest",
-            dependencies: ["UsageBoardCore"]
-        ),
         .testTarget(
             name: "UsageBoardTests",
             dependencies: ["UsageBoardCore"]

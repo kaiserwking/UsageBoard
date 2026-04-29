@@ -17,7 +17,6 @@ swift build                                          # 构建
 swift build -c release                               # Release 构建
 swift test                                           # 运行 XCTest 测试
 swift test --filter UsageBoardTests.testProgressHandlesBoundsAndRatio  # 运行单个测试
-swift run UsageBoardSelfTest                         # 核心自检（不依赖 XCTest）
 ```
 
 打包本地测试 app：
@@ -32,9 +31,7 @@ codesign --verify --deep --strict --verbose=2 dist/UsageBoard.app
 
 - `Sources/UsageBoardCore`：配置、数据模型、插件执行、更新检查等核心逻辑（纯 Swift，无 SwiftUI 依赖）。
 - `Sources/UsageBoardApp`：SwiftUI macOS app — menu bar popover、主窗口 Dashboard、设置界面。
-- `Sources/UsageBoardSelfTest`：不依赖 XCTest 的核心自检入口。
 - `Tests/UsageBoardTests`：XCTest 测试。
-- `Examples`：示例插件脚本（GLM、MiniMax、Tavily、shell 示例）。
 - `dist/UsageBoard.app`：本地测试用 app bundle。
 
 CLAUDE.md 是指向 AGENTS.md 的符号链接，修改任一文件即可。
