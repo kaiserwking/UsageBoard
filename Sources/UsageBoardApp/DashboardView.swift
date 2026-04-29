@@ -1,0 +1,399 @@
+import AppKit
+import SwiftUI
+import UsageBoardCore
+
+struct DashboardView: View {
+    @Environment(\.usageBoardCompact) private var isCompact
+    @ObservedObject var store: UsageBoardStore
+    var mode: DisplayMode
+    @State private var selectedTabID: UUID?
+
+    private var enabledPlugins: [PluginConfiguration] {
+        store.configuration.plugins.filter(\.enabled)
+    }
+
+    var body: some View {
+        Group {
+            if enabledPlugins.isEmpty {
+                EmptyPluginsView()
+            } else {
+                switch mode {
+                case .grouped:
+                    MeasuredScrollView(maxHeight: isCompact ? 460 : 680) {
+                        LazyVStack(spacing: isCompact ? 10 : 12) {
+                            ForEach(enabledPlugins) { plugin in
+                                PluginGroupView(snapshot: store.snapshot(for: plugin))
+                            }
+                        }
+                        .padding(isCompact ? EdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10) : EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
+                    }
+                case .tabs:
+                    TabView(selection: tabSelection) {
+                        ForEach(enabledPlugins) { plugin in
+                            MeasuredScrollView(maxHeight: isCompact ? 420 : 640) {
+                                PluginGroupView(snapshot: store.snapshot(for: plugin))
+                                    .padding(isCompact ? EdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10) : EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
+                            }
+                            .tag(plugin.id)
+                            .tabItem { Text(store.snapshot(for: plugin).displayName) }
+                        }
+                    }
+                    .padding(.top, isCompact ? 8 : 0)
+                    .frame(height: tabViewHeight)
+                }
+            }
+        }
+        .padding(.top, mainWindowTopInset)
+        .padding(.bottom, mainWindowBottomInset)
+        .onAppear {
+            ensureSelectedTab()
+        }
+        .onChange(of: enabledPlugins.map(\.id)) { _ in
+            ensureSelectedTab()
+        }
+        .background(
+            WindowContentHeightAdapter(height: adapterHeight, enabled: !isCompact)
+        )
+        .toolbar {
+            Button {
+                store.refreshAll()
+            } label: {
+                Label("刷新", systemImage: "arrow.clockwise")
+            }
+            QuitButton()
+        }
+        .frame(maxWidth: .infinity, maxHeight: isCompact ? nil : .infinity, alignment: .top)
+    }
+
+    private var tabSelection: Binding<UUID> {
+        Binding(
+            get: {
+                selectedPlugin?.id ?? enabledPlugins.first?.id ?? UUID()
+            },
+            set: { value in
+                selectedTabID = value
+            }
+        )
+    }
+
+    private var mainWindowTopInset: CGFloat {
+        isCompact ? 0 : 20
+    }
+
+    private var mainWindowBottomInset: CGFloat {
+        isCompact ? 0 : 20
+    }
+
+    private var selectedPlugin: PluginConfiguration? {
+        if let selectedTabID,
+           let plugin = enabledPlugins.first(where: { $0.id == selectedTabID }) {
+            return plugin
+        }
+        return enabledPlugins.first
+    }
+
+    private var tabViewHeight: CGFloat {
+        let selectedRows = max(selectedPlugin.map { store.snapshot(for: $0).items.count } ?? 1, 1)
+        let rowsHeight = CGFloat(selectedRows) * 26
+        let chromeHeight: CGFloat = isCompact ? 92 : 166
+        return min(max(chromeHeight + rowsHeight, isCompact ? 150 : 200), isCompact ? 460 : 700)
+    }
+
+    private var adapterHeight: CGFloat {
+        let padding = mainWindowTopInset + mainWindowBottomInset
+        switch mode {
+        case .grouped:
+            return 0
+        case .tabs:
+            return tabViewHeight + padding
+        }
+    }
+
+    private func ensureSelectedTab() {
+        guard !enabledPlugins.isEmpty else {
+            selectedTabID = nil
+            return
+        }
+        if let selectedTabID,
+           enabledPlugins.contains(where: { $0.id == selectedTabID }) {
+            return
+        }
+        selectedTabID = enabledPlugins.first?.id
+    }
+}
+
+private struct WindowContentHeightAdapter: NSViewRepresentable {
+    var height: CGFloat
+    var enabled: Bool
+
+    func makeNSView(context: Context) -> NSView {
+        NSView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard enabled, height > 0 else { return }
+
+        DispatchQueue.main.async {
+            guard let window = nsView.window else { return }
+            let nextHeight = max(height, 180)
+            let currentHeight = window.frame.height
+            guard abs(currentHeight - nextHeight) > 1 else { return }
+            let width = max(window.frame.width, 620)
+            let newFrame = NSRect(
+                x: window.frame.origin.x,
+                y: window.frame.origin.y + window.frame.height - nextHeight,
+                width: width,
+                height: nextHeight
+            )
+            window.setFrame(newFrame, display: true, animate: false)
+        }
+    }
+}
+
+struct EmptyPluginsView: View {
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "puzzlepiece.extension")
+                .font(.system(size: 40))
+                .foregroundStyle(.secondary)
+            Text("暂无插件")
+                .font(.headline)
+            Text("在设置中添加插件后显示用量。")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding()
+    }
+}
+
+struct OverviewView: View {
+    @ObservedObject var store: UsageBoardStore
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("UsageBoard")
+                    .font(.headline)
+                Spacer()
+                SettingsButton()
+                Button {
+                    store.refreshAll()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .buttonStyle(.borderless)
+                QuitButton()
+            }
+            .padding()
+
+            Divider()
+
+            DashboardView(store: store, mode: store.configuration.overviewDisplayMode)
+                .environment(\.usageBoardCompact, true)
+        }
+    }
+}
+
+struct MeasuredScrollView<Content: View>: View {
+    var maxHeight: CGFloat
+    @ViewBuilder var content: Content
+    @State private var contentHeight: CGFloat = 0
+
+    var body: some View {
+        ScrollView {
+            content
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: ContentHeightKey.self, value: proxy.size.height)
+                    }
+                )
+        }
+        .frame(height: contentHeight > 0 ? min(contentHeight, maxHeight) : maxHeight)
+        .onPreferenceChange(ContentHeightKey.self) { height in
+            if height > 0 {
+                contentHeight = height
+            }
+        }
+    }
+}
+
+private struct ContentHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
+private struct UsageBoardCompactKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var usageBoardCompact: Bool {
+        get { self[UsageBoardCompactKey.self] }
+        set { self[UsageBoardCompactKey.self] = newValue }
+    }
+}
+
+struct PluginGroupView: View {
+    @Environment(\.usageBoardCompact) private var isCompact
+    var snapshot: PluginSnapshot
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text(snapshot.displayName)
+                    .font(.headline)
+                Spacer()
+                stateView
+            }
+
+            if snapshot.items.isEmpty {
+                Text(emptyText)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 18)
+            } else {
+                VStack(spacing: 8) {
+                    ForEach(snapshot.items) { item in
+                        UsageItemRow(item: item, isCompact: isCompact)
+                    }
+                }
+            }
+        }
+        .padding(isCompact ? 10 : 14)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(nsColor: .separatorColor), lineWidth: 0.5)
+        )
+    }
+
+    @ViewBuilder
+    private var stateView: some View {
+        switch snapshot.state {
+        case .idle:
+            Text("等待刷新")
+                .foregroundStyle(.secondary)
+        case .loading:
+            ProgressView()
+                .controlSize(.small)
+        case .ready:
+            if let updatedAt = snapshot.updatedAt {
+                Text(updatedAt, style: .time)
+                    .foregroundStyle(.secondary)
+            }
+        case .failed(let message):
+            Text(message)
+                .lineLimit(1)
+                .foregroundStyle(.red)
+        }
+    }
+
+    private var emptyText: String {
+        switch snapshot.state {
+        case .failed:
+            return "插件执行失败"
+        default:
+            return "暂无用量数据"
+        }
+    }
+}
+
+struct UsageItemRow: View {
+    var item: UsageItem
+    var isCompact: Bool
+
+    var body: some View {
+        HStack(spacing: isCompact ? 6 : 8) {
+            Text(item.name)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .frame(width: isCompact ? 132 : 150, alignment: .leading)
+
+            UsageProgressBar(value: item.progress, label: item.displayValue(), color: item.color)
+                .frame(height: 18)
+                .layoutPriority(1)
+
+            Text(item.resetText())
+                .font(.caption)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .foregroundStyle(.secondary)
+                .frame(width: isCompact ? 88 : 104, alignment: .trailing)
+        }
+        .font(.callout)
+    }
+}
+
+struct UsageProgressBar: View {
+    var value: Double
+    var label: String
+    var color: String?
+
+    var body: some View {
+        GeometryReader { proxy in
+            let width = max(0, min(value, 1)) * proxy.size.width
+            ZStack(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(progressColor.opacity(0.16))
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(progressColor)
+                    .frame(width: width)
+                Text(label)
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .monospacedDigit()
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+        }
+        .frame(minWidth: 80)
+        .clipShape(RoundedRectangle(cornerRadius: 5))
+        .accessibilityLabel(label)
+    }
+
+    private var progressColor: Color {
+        switch color?.lowercased() {
+        case "red":
+            return .red
+        case "orange":
+            return .orange
+        case "yellow":
+            return .yellow
+        case "green":
+            return .green
+        case "blue", nil:
+            return .blue
+        default:
+            return .blue
+        }
+    }
+}
+
+private struct SettingsButton: View {
+    var body: some View {
+        Button {
+            AppDelegate.shared?.openSettings()
+        } label: {
+            Image(systemName: "gear")
+        }
+        .buttonStyle(.borderless)
+    }
+}
+
+private struct QuitButton: View {
+    var body: some View {
+        Button {
+            NSApp.terminate(nil)
+        } label: {
+            Image(systemName: "power")
+        }
+        .buttonStyle(.borderless)
+        .help("退出 UsageBoard")
+    }
+}

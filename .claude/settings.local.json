@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(swift build *)",
+      "Bash(cp -f /Users/may/Projects/UsageBoard/.build/release/UsageBoard /Users/may/Projects/UsageBoard/dist/UsageBoard.app/Contents/MacOS/UsageBoard)",
+      "Bash(codesign --force --deep --sign - /Users/may/Projects/UsageBoard/dist/UsageBoard.app)",
+      "Bash(codesign --verify --deep --strict --verbose=2 /Users/may/Projects/UsageBoard/dist/UsageBoard.app)",
+      "Bash(open *)",
+      "Bash(osascript -e ' *)",
+      "Bash(osascript *)",
+      "Bash(screencapture -R213,282,620,232 -x /tmp/usageboard-main.png)",
+      "Bash(pkill -x UsageBoard)",
+      "Bash(screencapture -R50,258,620,232 -x /tmp/usageboard-main2.png)",
+      "mcp__zai-mcp-server__analyze_image",
+      "Bash(codesign --force --deep --sign - dist/UsageBoard.app)",
+      "Bash(codesign --verify --deep --strict --verbose=2 dist/UsageBoard.app)",
+      "Bash(pkill -f \"UsageBoard.app\")",
+      "Bash(swift test *)",
+      "Bash(swift run *)",
+      "Bash(chmod +x *)",
+      "Bash(bash *)",
+      "Bash(scp *)",
+      "Bash(pkill -f 'UsageBoard\\\\.app')"
+    ]
+  }
+}
