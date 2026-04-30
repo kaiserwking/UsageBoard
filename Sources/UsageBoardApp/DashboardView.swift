@@ -3,10 +3,13 @@ import SwiftUI
 import UsageBoardCore
 
 struct DashboardView: View {
-    @Environment(\.usageBoardCompact) private var isCompact
     @ObservedObject var store: UsageBoardStore
     var mode: DisplayMode
     @State private var selectedTabID: UUID?
+
+    private var maxHeight: CGFloat {
+        (NSScreen.main?.visibleFrame.height ?? 800) * 2 / 3
+    }
 
     private var enabledPlugins: [PluginConfiguration] {
         store.configuration.plugins.filter(\.enabled)
@@ -19,41 +22,36 @@ struct DashboardView: View {
             } else {
                 switch mode {
                 case .grouped:
-                    MeasuredScrollView(maxHeight: isCompact ? 460 : 680) {
-                        LazyVStack(spacing: isCompact ? 10 : 12) {
+                    MeasuredScrollView(maxHeight: maxHeight) {
+                        LazyVStack(spacing: 10) {
                             ForEach(enabledPlugins) { plugin in
                                 PluginGroupView(snapshot: store.snapshot(for: plugin))
                             }
                         }
-                        .padding(isCompact ? EdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10) : EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
+                        .padding(10)
                     }
                 case .tabs:
                     TabView(selection: tabSelection) {
                         ForEach(enabledPlugins) { plugin in
-                            MeasuredScrollView(maxHeight: isCompact ? 420 : 640) {
+                            MeasuredScrollView(maxHeight: maxHeight - 40) {
                                 PluginGroupView(snapshot: store.snapshot(for: plugin))
-                                    .padding(isCompact ? EdgeInsets(top: 10, leading: 10, bottom: 10, trailing: 10) : EdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16))
+                                    .padding(10)
                             }
                             .tag(plugin.id)
                             .tabItem { Text(store.snapshot(for: plugin).displayName) }
                         }
                     }
-                    .padding(.top, isCompact ? 8 : 0)
+                    .padding(.top, 8)
                     .frame(height: tabViewHeight)
                 }
             }
         }
-        .padding(.top, mainWindowTopInset)
-        .padding(.bottom, mainWindowBottomInset)
         .onAppear {
             ensureSelectedTab()
         }
         .onChange(of: enabledPlugins.map(\.id)) { _ in
             ensureSelectedTab()
         }
-        .background(
-            WindowContentHeightAdapter(height: adapterHeight, enabled: !isCompact)
-        )
         .toolbar {
             Button {
                 store.refreshAll()
@@ -62,7 +60,6 @@ struct DashboardView: View {
             }
             QuitButton()
         }
-        .frame(maxWidth: .infinity, maxHeight: isCompact ? nil : .infinity, alignment: .top)
     }
 
     private var tabSelection: Binding<UUID> {
@@ -76,14 +73,6 @@ struct DashboardView: View {
         )
     }
 
-    private var mainWindowTopInset: CGFloat {
-        isCompact ? 0 : 20
-    }
-
-    private var mainWindowBottomInset: CGFloat {
-        isCompact ? 0 : 20
-    }
-
     private var selectedPlugin: PluginConfiguration? {
         if let selectedTabID,
            let plugin = enabledPlugins.first(where: { $0.id == selectedTabID }) {
@@ -95,18 +84,7 @@ struct DashboardView: View {
     private var tabViewHeight: CGFloat {
         let selectedRows = max(selectedPlugin.map { store.snapshot(for: $0).items.count } ?? 1, 1)
         let rowsHeight = CGFloat(selectedRows) * 26
-        let chromeHeight: CGFloat = isCompact ? 92 : 166
-        return min(max(chromeHeight + rowsHeight, isCompact ? 150 : 200), isCompact ? 460 : 700)
-    }
-
-    private var adapterHeight: CGFloat {
-        let padding = mainWindowTopInset + mainWindowBottomInset
-        switch mode {
-        case .grouped:
-            return 0
-        case .tabs:
-            return tabViewHeight + padding
-        }
+        return min(max(92 + rowsHeight, 150), maxHeight)
     }
 
     private func ensureSelectedTab() {
@@ -119,34 +97,6 @@ struct DashboardView: View {
             return
         }
         selectedTabID = enabledPlugins.first?.id
-    }
-}
-
-private struct WindowContentHeightAdapter: NSViewRepresentable {
-    var height: CGFloat
-    var enabled: Bool
-
-    func makeNSView(context: Context) -> NSView {
-        NSView()
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        guard enabled, height > 0 else { return }
-
-        DispatchQueue.main.async {
-            guard let window = nsView.window else { return }
-            let nextHeight = max(height, 180)
-            let currentHeight = window.frame.height
-            guard abs(currentHeight - nextHeight) > 1 else { return }
-            let width = max(window.frame.width, 620)
-            let newFrame = NSRect(
-                x: window.frame.origin.x,
-                y: window.frame.origin.y + window.frame.height - nextHeight,
-                width: width,
-                height: nextHeight
-            )
-            window.setFrame(newFrame, display: true, animate: false)
-        }
     }
 }
 
@@ -190,7 +140,6 @@ struct OverviewView: View {
             Divider()
 
             DashboardView(store: store, mode: store.configuration.overviewDisplayMode)
-                .environment(\.usageBoardCompact, true)
         }
     }
 }
@@ -226,19 +175,7 @@ private struct ContentHeightKey: PreferenceKey {
     }
 }
 
-private struct UsageBoardCompactKey: EnvironmentKey {
-    static let defaultValue = false
-}
-
-extension EnvironmentValues {
-    var usageBoardCompact: Bool {
-        get { self[UsageBoardCompactKey.self] }
-        set { self[UsageBoardCompactKey.self] = newValue }
-    }
-}
-
 struct PluginGroupView: View {
-    @Environment(\.usageBoardCompact) private var isCompact
     var snapshot: PluginSnapshot
 
     var body: some View {
@@ -259,12 +196,12 @@ struct PluginGroupView: View {
             } else {
                 VStack(spacing: 8) {
                     ForEach(snapshot.items) { item in
-                        UsageItemRow(item: item, isCompact: isCompact)
+                        UsageItemRow(item: item)
                     }
                 }
             }
         }
-        .padding(isCompact ? 10 : 14)
+        .padding(10)
         .background(Color(nsColor: .controlBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
@@ -306,14 +243,13 @@ struct PluginGroupView: View {
 
 struct UsageItemRow: View {
     var item: UsageItem
-    var isCompact: Bool
 
     var body: some View {
-        HStack(spacing: isCompact ? 6 : 8) {
+        HStack(spacing: 6) {
             Text(item.name)
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .frame(width: isCompact ? 132 : 150, alignment: .leading)
+                .frame(width: 120, alignment: .leading)
 
             UsageProgressBar(value: item.progress, label: item.displayValue(), color: item.color)
                 .frame(height: 18)
@@ -324,7 +260,7 @@ struct UsageItemRow: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
                 .foregroundStyle(.secondary)
-                .frame(width: isCompact ? 88 : 104, alignment: .trailing)
+                .frame(width: 80, alignment: .trailing)
         }
         .font(.callout)
     }

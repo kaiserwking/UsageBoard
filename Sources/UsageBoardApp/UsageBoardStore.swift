@@ -219,12 +219,21 @@ final class UsageBoardStore: ObservableObject {
         }
     }
 
-    private static let updateCheckURL = URL(string: "__UPDATE_CHECK_URL__")!
+    private static let updateCheckURL: URL? = {
+        guard let string = Bundle.main.infoDictionary?["UBUpdateCheckURL"] as? String,
+              !string.isEmpty else { return nil }
+        return URL(string: string)
+    }()
 
-    func checkForUpdates() {
+    func checkForUpdates(userInitiated: Bool = false) {
+        guard let url = Self.updateCheckURL else {
+            updateMessage = "未配置更新检查地址"
+            return
+        }
+        availableUpdate = nil
         Task {
             do {
-                let result = try await updateChecker.check(currentVersion: currentVersion, url: Self.updateCheckURL)
+                let result = try await updateChecker.check(currentVersion: currentVersion, url: url)
                 if result.hasUpdate {
                     availableUpdate = result.info
                     updateMessage = nil

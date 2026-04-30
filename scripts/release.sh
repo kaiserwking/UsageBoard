@@ -11,10 +11,6 @@ REMOTE_PATH="/data/web/blog/usageboard"
 DOWNLOAD_BASE_URL="https://may.ltd/usageboard"
 UPDATE_CHECK_URL="${DOWNLOAD_BASE_URL}/version.json"
 
-# --- Inject update check URL ---
-STORE_FILE="$PROJECT_DIR/Sources/UsageBoardApp/UsageBoardStore.swift"
-sed -i '' "s|__UPDATE_CHECK_URL__|${UPDATE_CHECK_URL}|g" "$STORE_FILE"
-
 # --- Version handling ---
 CURRENT_VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$PLIST")
 
@@ -27,6 +23,16 @@ fi
 
 echo "版本: $CURRENT_VERSION → $NEW_VERSION"
 
+# --- Release notes ---
+LAST_TAG=$(git tag --sort=-version:refname | head -1)
+if [ $# -ge 2 ]; then
+    NOTES="$2"
+elif [ -n "$LAST_TAG" ]; then
+    NOTES=$(git log "${LAST_TAG}..HEAD" --format="- %s" 2>/dev/null || echo "")
+else
+    NOTES=""
+fi
+
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $NEW_VERSION" "$PLIST"
 
 # --- Build ---
@@ -38,6 +44,11 @@ echo "打包 app..."
 cp .build/release/UsageBoard "$APP_BUNDLE/Contents/MacOS/UsageBoard"
 mkdir -p "$APP_BUNDLE/Contents/Resources/Plugins"
 cp "$PROJECT_DIR/Resources/BundledPlugins/"*.py "$APP_BUNDLE/Contents/Resources/Plugins/"
+
+# --- Inject update check URL into Info.plist ---
+/usr/libexec/PlistBuddy -c "Add :UBUpdateCheckURL string ${UPDATE_CHECK_URL}" "$PLIST" 2>/dev/null \
+    || /usr/libexec/PlistBuddy -c "Set :UBUpdateCheckURL ${UPDATE_CHECK_URL}" "$PLIST"
+
 codesign --force --deep --sign - "$APP_BUNDLE"
 codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE" 2>&1 | tail -1
 
@@ -59,7 +70,7 @@ cat > "$DIST_DIR/version.json" << EOF
   "updatedAt" : "${UPDATED_AT}",
   "latestVersion" : "${NEW_VERSION}",
   "downloadURL" : "${DOWNLOAD_URL}",
-  "notes" : ""
+  "notes" : "${NOTES}"
 }
 EOF
 
@@ -79,6 +90,3 @@ ssh "$REMOTE_HOST" "cd ${REMOTE_PATH} && ls -1t UsageBoard-*.zip 2>/dev/null | t
 
 echo ""
 echo "发布完成: v${NEW_VERSION}"
-
-# --- Restore placeholder ---
-sed -i '' "s|${UPDATE_CHECK_URL}|__UPDATE_CHECK_URL__|g" "$STORE_FILE"

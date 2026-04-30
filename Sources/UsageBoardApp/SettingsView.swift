@@ -218,7 +218,8 @@ struct PluginSettingsView: View {
                                 .onDrop(of: [.text], delegate: PluginDropDelegate(
                                     plugins: $store.configuration.plugins,
                                     targetID: plugin.id,
-                                    draggingID: $draggingPluginID
+                                    draggingID: $draggingPluginID,
+                                    onDropCompleted: { store.saveConfiguration() }
                                 ))
                         }
                     }
@@ -453,6 +454,7 @@ struct PluginSettingsView: View {
 
 struct AboutView: View {
     @ObservedObject var store: UsageBoardStore
+    @State private var isUserChecking = false
 
     private var currentVersion: String {
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "未知"
@@ -464,12 +466,9 @@ struct AboutView: View {
                 HStack(spacing: 8) {
                     Text(currentVersion)
                         .foregroundStyle(.secondary)
-                    Button(store.isUpdating ? "更新中..." : (store.availableUpdate != nil ? "更新可用" : "检查更新")) {
-                        if store.availableUpdate != nil {
-                            showUpdateAlert(store.availableUpdate!)
-                        } else {
-                            store.checkForUpdates()
-                        }
+                    Button(store.isUpdating ? "更新中..." : "检查更新") {
+                        isUserChecking = true
+                        store.checkForUpdates()
                     }
                     .controlSize(.small)
                     .disabled(store.isUpdating)
@@ -481,10 +480,6 @@ struct AboutView: View {
                             .font(.system(size: 12))
                             .lineLimit(1)
                             .foregroundStyle(.secondary)
-                    } else if store.availableUpdate != nil {
-                        Text("发现新版本")
-                            .font(.system(size: 12))
-                            .foregroundStyle(.orange)
                     }
                 }
             }
@@ -493,6 +488,11 @@ struct AboutView: View {
                 Text("聚合展示各类 API 和服务的用量配额")
                     .foregroundStyle(.secondary)
             }
+        }
+        .onChange(of: store.availableUpdate) { newValue in
+            guard isUserChecking, let newValue else { return }
+            isUserChecking = false
+            showUpdateAlert(newValue)
         }
     }
 
@@ -740,6 +740,7 @@ struct PluginDropDelegate: DropDelegate {
     @Binding var plugins: [PluginConfiguration]
     let targetID: UUID
     @Binding var draggingID: UUID?
+    var onDropCompleted: () -> Void
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
         DropProposal(operation: .move)
@@ -756,6 +757,7 @@ struct PluginDropDelegate: DropDelegate {
         let moved = plugins.remove(at: fromIndex)
         plugins.insert(moved, at: toIndex > fromIndex ? toIndex : toIndex)
         self.draggingID = nil
+        onDropCompleted()
         return true
     }
 }

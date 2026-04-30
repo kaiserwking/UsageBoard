@@ -262,7 +262,7 @@ public struct UsageItem: Codable, Equatable, Identifiable, Sendable {
         case .percent:
             return "\(Int((progress * 100).rounded()))%"
         case .ratio:
-            return "\(UsageItem.formatNumber(used))/\(UsageItem.formatNumber(limit))"
+            return "\(UsageItem.formatNumber(used)) / \(UsageItem.formatNumber(limit))"
         }
     }
 
