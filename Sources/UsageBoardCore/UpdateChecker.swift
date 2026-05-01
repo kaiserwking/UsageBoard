@@ -67,7 +67,13 @@ public struct UpdateChecker: Sendable {
     }()
 
     public func check(currentVersion: String, url: URL) async throws -> UpdateCheckResult {
-        let (data, _) = try await Self.session.data(from: url)
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        let existing = components?.queryItems ?? []
+        components?.queryItems = existing + [URLQueryItem(name: "_", value: String(Int.random(in: 1_000_000...9_999_999)))]
+        guard let cacheBustURL = components?.url else {
+            throw URLError(.badURL)
+        }
+        let (data, _) = try await Self.session.data(from: cacheBustURL)
         let info = try UsageBoardJSON.decoder().decode(UpdateInfo.self, from: data)
         return UpdateCheckResult(info: info, hasUpdate: Self.isVersion(info.latestVersion, newerThan: currentVersion))
     }

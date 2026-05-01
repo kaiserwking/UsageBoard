@@ -262,11 +262,19 @@ def build_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
             )
         )
 
+    display_names = {
+        "glm-text-5h": "5 小时额度",
+        "glm-text-week": "周额度",
+        "glm-tool-month": "MCP 月额度",
+    }
     order = {
         "glm-text-5h": 0,
         "glm-text-week": 1,
         "glm-tool-month": 2,
     }
+    for entry in output:
+        if entry["id"] in display_names:
+            entry["name"] = display_names[entry["id"]]
     return sorted(output, key=lambda value: order.get(value["id"], 99))
 
 

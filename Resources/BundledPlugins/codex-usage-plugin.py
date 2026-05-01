@@ -156,7 +156,7 @@ def build_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
             used = 100 - pct
             items.append({
                 "id": "codex-five-hour",
-                "name": "5 小时限额",
+                "name": "5 小时额度",
                 "used": round(used, 1),
                 "limit": 100,
                 "displayStyle": "percent",
@@ -171,7 +171,7 @@ def build_items(payload: dict[str, Any]) -> list[dict[str, Any]]:
             used = 100 - pct
             items.append({
                 "id": "codex-weekly",
-                "name": "周限额",
+                "name": "周额度",
                 "used": round(used, 1),
                 "limit": 100,
                 "displayStyle": "percent",
