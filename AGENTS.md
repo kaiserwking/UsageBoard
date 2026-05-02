@@ -42,7 +42,7 @@ bash scripts/release.sh
 bash scripts/release.sh 0.1.6
 ```
 
-`scripts/release.sh` 会读取 `dist/UsageBoard.app/Contents/Info.plist` 中的当前版本，默认 patch +1，也可以显式传入版本号。脚本会构建、复制二进制和内置插件、签名、生成 zip 和 `version.json`，并上传到脚本中配置的服务器路径。发布脚本会临时把 `UsageBoardStore.swift` 中的 `__UPDATE_CHECK_URL__` 替换为线上 `version.json` 地址，结束后再恢复占位符。
+`scripts/release.sh` 会读取 `dist/UsageBoard.app/Contents/Info.plist` 中的当前版本，默认 patch +1，也可以显式传入版本号。脚本会构建、复制二进制和内置插件、签名、生成 zip 和 `version.json`。设置 `UB_DEPLOY_HOST`、`UB_DEPLOY_PATH`、`UB_DOWNLOAD_BASE_URL` 环境变量后会自动上传到服务器；不设置则仅本地构建。`build.sh` 和 `release.sh` 通过 `UB_UPDATE_CHECK_URL` 环境变量注入更新检查地址，未设置则跳过。发布脚本会临时把 `UsageBoardStore.swift` 中的 `__UPDATE_CHECK_URL__` 替换为线上 `version.json` 地址，结束后再恢复占位符。
 
 ## 项目结构
 
